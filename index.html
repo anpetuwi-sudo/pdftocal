@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gottesdienst → Kalender</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --cream: #f7f3ee;
+    --warm-white: #fdfaf6;
+    --stone: #c8b89a;
+    --stone-dark: #9e8b72;
+    --ink: #1a1410;
+    --ink-mid: #3d3028;
+    --ink-light: #6b5c4e;
+    --gold: #b8860b;
+    --gold-light: #d4a017;
+    --red: #8b2020;
+    --green: #1a5c2e;
+    --border: rgba(200,184,154,0.4);
+    --shadow: 0 2px 16px rgba(26,20,16,0.08);
+    --shadow-hover: 0 8px 32px rgba(26,20,16,0.14);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    min-height: 100vh;
+    background-image: 
+      radial-gradient(ellipse at 20% 0%, rgba(184,134,11,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 100%, rgba(139,32,32,0.04) 0%, transparent 60%);
+  }
+
+  header {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 2rem 2rem 1.6rem;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '✝';
+    position: absolute;
+    right: 2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 5rem;
+    opacity: 0.06;
+    color: var(--stone);
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    color: var(--stone);
+    font-size: 0.85rem;
+    margin-top: 0.25rem;
+    font-weight: 300;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Step panels */
+  .step {
+    background: var(--warm-white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s;
+  }
+  .step:hover { box-shadow: var(--shadow-hover); }
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .step-num {
+    width: 28px; height: 28px;
+    background: var(--ink);
+    color: var(--cream);
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--stone);
+    border-radius: 10px;
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(199,184,154,0.06);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--gold);
+    background: rgba(184,134,11,0.06);
+  }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+  .upload-icon { font-size: 2.5rem; margin-bottom: 0.5rem; opacity: 0.5; }
+  .upload-label { font-size: 0.9rem; color: var(--ink-light); }
+  .upload-label strong { color: var(--ink); }
+  .file-name {
+    margin-top: 0.75rem;
+    background: rgba(26,92,46,0.08);
+    color: var(--green);
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    display: inline-block;
+  }
+
+  /* Year input */
+  .year-row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  .year-input {
+    padding: 0.6rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.95rem;
+    background: var(--cream);
+    color: var(--ink);
+    width: 120px;
+    transition: border-color 0.2s;
+  }
+  .year-input:focus { outline: none; border-color: var(--gold); }
+
+  /* Buttons */
+  .btn {
+    padding: 0.6rem 1.25rem;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .btn-primary:hover { background: var(--ink-mid); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    background: var(--cream);
+    color: var(--ink);
+    border: 1.5px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--stone-dark); }
+  .btn-gold {
+    background: var(--gold);
+    color: white;
+  }
+  .btn-gold:hover { background: var(--gold-light); transform: translateY(-1px); }
+  .btn-gold:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1.5px solid rgba(139,32,32,0.2);
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+  .btn-danger:hover { background: rgba(139,32,32,0.06); }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex; gap: 0.6rem; flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+  .count-badge {
+    margin-left: auto;
+    background: var(--ink);
+    color: var(--cream);
+    border-radius: 20px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+
+  /* Events grid */
+  .events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+
+  /* Event card */
+  .event-card {
+    background: var(--warm-white);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    transition: all 0.18s;
+    position: relative;
+  }
+  .event-card.selected {
+    border-color: var(--gold);
+    background: rgba(184,134,11,0.03);
+  }
+  .event-card.cancelled {
+    opacity: 0.5;
+    border-style: dashed;
+  }
+  .event-card-top {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    margin-bottom: 0.75rem;
+  }
+  .card-checkbox {
+    width: 18px; height: 18px;
+    accent-color: var(--gold);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .card-date-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--stone-dark);
+    background: rgba(200,184,154,0.2);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .cancelled-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--red);
+    background: rgba(139,32,32,0.08);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card-fields { display: flex; flex-direction: column; gap: 0.45rem; }
+  .card-field label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--stone-dark);
+    display: block;
+    margin-bottom: 0.15rem;
+  }
+  .card-field input, .card-field textarea {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.83rem;
+    background: var(--cream);
+    color: var(--ink);
+    transition: border-color 0.15s;
+    resize: vertical;
+  }
+  .card-field input:focus, .card-field textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+  .card-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+
+  /* Status */
+  .status {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+  .status.info { background: rgba(184,134,11,0.08); color: var(--gold); border: 1px solid rgba(184,134,11,0.2); }
+  .status.error { background: rgba(139,32,32,0.08); color: var(--red); border: 1px solid rgba(139,32,32,0.2); }
+  .status.success { background: rgba(26,92,46,0.08); color: var(--green); border: 1px solid rgba(26,92,46,0.2); }
+
+  /* Loading */
+  .loading { display: flex; align-items: center; gap: 0.75rem; color: var(--ink-light); font-size: 0.88rem; }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--ink-light);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 0.75rem; opacity: 0.3; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+  footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--stone-dark);
+    font-size: 0.78rem;
+  }
+
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.4rem; }
+    .events-grid { grid-template-columns: 1fr; }
+    .card-row { grid-template-columns: 1fr; }
+    .toolbar { gap: 0.4rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="max-width:960px;margin:0 auto;">
+    <h1>✝ Gottesdienst­kalender</h1>
+    <p>PDF-Gottesdienstordnung → .ics Kalender­datei</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Step 1: PDF Upload -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-title">PDF hochladen</div>
+    </div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" accept=".pdf" id="pdfInput" />
+      <div class="upload-icon">📄</div>
+      <div class="upload-label"><strong>PDF hochladen</strong> oder hierher ziehen</div>
+      <div class="upload-label" style="margin-top:0.25rem;font-size:0.78rem;">Gottesdienstordnung (Steinfeld · Hausen · Waldzell)</div>
+    </div>
+    <div id="fileName"></div>
+  </div>
+
+  <!-- Step 2: Year -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-title">Kalenderjahr wählen</div>
+    </div>
+    <div class="year-row">
+      <label style="font-size:0.85rem;color:var(--ink-light);">Jahr:</label>
+      <input type="number" class="year-input" id="yearInput" min="2020" max="2040" value="2025" />
+      <button class="btn btn-primary" id="parseBtn" disabled>
+        📋 Termine prüfen
+      </button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div id="statusArea"></div>
+
+  <!-- Step 3: Events -->
+  <div id="eventsSection" style="display:none;">
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">Termine prüfen &amp; bearbeiten</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="selectAllBtn">☑ Alle auswählen</button>
+        <button class="btn btn-secondary" id="deselectAllBtn">☐ Auswahl aufheben</button>
+        <button class="btn btn-danger" id="resetBtn">↺ Zurücksetzen</button>
+        <span class="count-badge" id="countBadge">0 ausgewählt</span>
+      </div>
+      <div class="events-grid" id="eventsGrid"></div>
+    </div>
+
+    <!-- Step 4: Export -->
+    <div class="step">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">ICS exportieren</div>
+      </div>
+      <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-gold" id="exportBtn" disabled>
+          📅 ICS exportieren
+        </button>
+        <span style="font-size:0.82rem;color:var(--ink-light);">Ausgewählte Termine als .ics-Datei herunterladen</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>Alle Daten werden nur lokal im Browser verarbeitet · Kein Server · DSGVO-konform</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfText = '';
+let allEvents = [];
+const LOCATIONS = ['Steinfeld', 'Hausen', 'Waldzell', 'Pfarrheim'];
+
+const pdfInput = document.getElementById('pdfInput');
+const uploadZone = document.getElementById('uploadZone');
+const fileNameEl = document.getElementById('fileName');
+const yearInput = document.getElementById('yearInput');
+const parseBtn = document.getElementById('parseBtn');
+const statusArea = document.getElementById('statusArea');
+const eventsSection = document.getElementById('eventsSection');
+const eventsGrid = document.getElementById('eventsGrid');
+const countBadge = document.getElementById('countBadge');
+const exportBtn = document.getElementById('exportBtn');
+
+// Drag & drop
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') handleFile(file);
+});
+
+pdfInput.addEventListener('change', () => {
+  if (pdfInput.files[0]) handleFile(pdfInput.files[0]);
+});
+
+async function handleFile(file) {
+  fileNameEl.innerHTML = `<div class="file-name">✓ ${file.name}</div>`;
+  showStatus('PDF wird geladen…', 'info', true);
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // Sort items by y then x for proper reading order
+      const items = content.items.slice().sort((a, b) => {
+        const dy = Math.round(b.transform[5]) - Math.round(a.transform[5]);
+        return dy !== 0 ? dy : a.transform[4] - b.transform[4];
+      });
+      let lastY = null;
+      for (const item of items) {
+        const y = Math.round(item.transform[5]);
+        if (lastY !== null && Math.abs(y - lastY) > 3) text += '\n';
+        text += item.str + ' ';
+        lastY = y;
+      }
+      text += '\n';
+    }
+    pdfText = text;
+    showStatus('PDF erfolgreich geladen. Klicken Sie auf „Termine prüfen".', 'success');
+    parseBtn.disabled = false;
+  } catch (e) {
+    showStatus('Fehler beim Lesen der PDF: ' + e.message, 'error');
+  }
+}
+
+parseBtn.addEventListener('click', () => {
+  if (!pdfText) return;
+  const year = parseInt(yearInput.value);
+  if (!year || year < 2020 || year > 2040) {
+    showStatus('Bitte gültiges Jahr eingeben (2020–2040).', 'error');
+    return;
+  }
+  allEvents = parsePDF(pdfText, year);
+  if (allEvents.length === 0) {
+    showStatus('Keine Termine erkannt. Bitte PDF prüfen.', 'error');
+    return;
+  }
+  showStatus(`${allEvents.length} Termine erkannt.`, 'success');
+  renderEvents();
+  eventsSection.style.display = 'block';
+  setTimeout(() => eventsSection.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+});
+
+function parsePDF(text, year) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const events = [];
+  let currentDate = null;
+
+  const weekdays = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+  const datePattern = new RegExp(`(?:${weekdays.join('|')})\\s+(\\d{1,2})\\.(\\d{1,2})\\.`);
+
+  // Combine all text into a single string for flexible parsing
+  const fullText = lines.join(' ');
+  
+  // Split by date markers
+  const dateRegex = new RegExp(`((?:${weekdays.join('|')})\\s+\\d{1,2}\\.\\d{1,2}\\.)`, 'g');
+  const parts = fullText.split(dateRegex).filter(Boolean);
+
+  let i = 0;
+  while (i < parts.length) {
+    const part = parts[i];
+    const dateMatch = part.match(datePattern);
+    if (dateMatch) {
+      const day = parseInt(dateMatch[1]);
+      const month = parseInt(dateMatch[2]);
+      currentDate = { day, month, year };
+      i++;
+      // Next part is the events for this date
+      if (i < parts.length && !parts[i].match(datePattern)) {
+        const evtText = parts[i];
+        const parsed = parseEventBlock(evtText, currentDate);
+        events.push(...parsed);
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+
+  return events;
+}
+
+function parseEventBlock(block, date) {
+  const events = [];
+  // Match: Location HH:MM Description
+  const locPattern = new RegExp(
+    `(${LOCATIONS.join('|')})\\s+(\\d{1,2}):(\\d{2})\\s+(.+?)(?=(?:${LOCATIONS.join('|')})\\s+\\d{1,2}:\\d{2}|$)`,
+    'g'
+  );
+
+  let match;
+  while ((match = locPattern.exec(block)) !== null) {
+    const location = match[1];
+    const hour = parseInt(match[2]);
+    const min = parseInt(match[3]);
+    let description = match[4].trim().replace(/\s+/g, ' ').replace(/[-–]\s*\d+\s*-?\s*$/, '').trim();
+
+    const cancelled = /entf[äa]llt/i.test(description);
+
+    // Title: description without "für/f. ..." clause
+    let title = description
+      .replace(/\s+f\.\s+.+$/i, '')
+      .replace(/\s+für\s+.+$/i, '')
+      .replace(/\s+f[üu]r\s+.+$/i, '')
+      .trim();
+    if (!title || title.length < 3) title = description.split(/\s+f[.\s]/)[0].trim();
+
+    const dtStart = new Date(date.year, date.month - 1, date.day, hour, min, 0);
+    const dtEnd = new Date(dtStart.getTime() + 60 * 60 * 1000);
+
+    events.push({
+      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      selected: !cancelled,
+      cancelled,
+      title: title || 'Gottesdienst',
+      location,
+      description,
+      dtStart,
+      dtEnd,
+      allDay: cancelled,
+    });
+  }
+  return events;
+}
+
+// Adjust overlapping end times
+function adjustOverlaps(events) {
+  const sorted = [...events].sort((a, b) => a.dtStart - b.dtStart);
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (sorted[i].location === sorted[i+1].location &&
+        sorted[i].dtEnd > sorted[i+1].dtStart) {
+      sorted[i].dtEnd = new Date(sorted[i+1].dtStart);
+    }
+  }
+}
+
+function renderEvents() {
+  adjustOverlaps(allEvents);
+  eventsGrid.innerHTML = '';
+  if (allEvents.length === 0) {
+    eventsGrid.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Keine Termine gefunden.</p></div>';
+    return;
+  }
+
+  // Group by date
+  const byDate = {};
+  for (const ev of allEvents) {
+    const key = ev.dtStart.toISOString().slice(0, 10);
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push(ev);
+  }
+
+  for (const [dateKey, evts] of Object.entries(byDate).sort()) {
+    const d = new Date(dateKey + 'T12:00:00');
+    const dateLabel = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    // Date separator
+    const sep = document.createElement('div');
+    sep.style.cssText = 'grid-column:1/-1;padding:0.5rem 0 0.25rem;border-bottom:1px solid var(--border);';
+    sep.innerHTML = `<span style="font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:600;color:var(--ink-mid);">${dateLabel}</span>`;
+    eventsGrid.appendChild(sep);
+
+    for (const ev of evts) {
+      eventsGrid.appendChild(buildCard(ev));
+    }
+  }
+
+  updateCount();
+}
+
+function buildCard(ev) {
+  const card = document.createElement('div');
+  card.className = `event-card${ev.selected ? ' selected' : ''}${ev.cancelled ? ' cancelled' : ''}`;
+  card.dataset.id = ev.id;
+
+  const dtStartStr = formatDatetimeLocal(ev.dtStart);
+  const dtEndStr = formatDatetimeLocal(ev.dtEnd);
+
+  card.innerHTML = `
+    <div class="event-card-top">
+      <input type="checkbox" class="card-checkbox" ${ev.selected ? 'checked' : ''} data-id="${ev.id}" />
+      <span class="card-date-badge">${ev.dtStart.toLocaleTimeString('de-DE', {hour:'2-digit',minute:'2-digit'})} Uhr · ${ev.location}</span>
+      ${ev.cancelled ? '<span class="cancelled-badge">Entfällt</span>' : ''}
+    </div>
+    <div class="card-fields">
+      <div class="card-field">
+        <label>Titel</label>
+        <input type="text" value="${escHtml(ev.title)}" data-field="title" data-id="${ev.id}" />
+      </div>
+      <div class="card-field">
+        <label>Ort</label>
+        <input type="text" value="${escHtml(ev.location)}" data-field="location" data-id="${ev.id}" />
+      </div>
+      <div class="card-row">
+        <div class="card-field">
+          <label>Beginn</label>
+          <input type="datetime-local" value="${dtStartStr}" data-field="dtStart" data-id="${ev.id}" />
+        </div>
+        <div class="card-field">
+          <label>Ende</label>
+          <input type="datetime-local" value="${dtEndStr}" data-field="dtEnd" data-id="${ev.id}" />
+        </div>
+      </div>
+      <div class="card-field">
+        <label>Beschreibung</label>
+        <textarea rows="2" data-field="description" data-id="${ev.id}">${escHtml(ev.description)}</textarea>
+      </div>
+    </div>
+  `;
+
+  // Checkbox handler
+  card.querySelector('.card-checkbox').addEventListener('change', e => {
+    const ev = allEvents.find(x => x.id === e.target.dataset.id);
+    if (ev) ev.selected = e.target.checked;
+    card.classList.toggle('selected', e.target.checked);
+    updateCount();
+  });
+
+  // Field change handlers
+  card.querySelectorAll('[data-field]').forEach(input => {
+    input.addEventListener('change', e => {
+      const ev = allEvents.find(x => x.id === e.target.dataset.id);
+      if (!ev) return;
+      const field = e.target.dataset.field;
+      if (field === 'dtStart' || field === 'dtEnd') {
+        ev[field] = new Date(e.target.value);
+      } else {
+        ev[field] = e.target.value;
+      }
+    });
+  });
+
+  return card;
+}
+
+function formatDatetimeLocal(dt) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function updateCount() {
+  const sel = allEvents.filter(e => e.selected).length;
+  countBadge.textContent = `${sel} ausgewählt`;
+  exportBtn.disabled = sel === 0;
+}
+
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+  allEvents.forEach(e => e.selected = true);
+  renderEvents();
+});
+document.getElementById('deselectAllBtn').addEventListener('click', () => {
+  allEvents.forEach(e => e.selected = false);
+  renderEvents();
+});
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (confirm('Alle Änderungen verwerfen und neu einlesen?')) {
+    allEvents = [];
+    eventsSection.style.display = 'none';
+    pdfText && parseBtn.click();
+  }
+});
+
+exportBtn.addEventListener('click', exportICS);
+
+function exportICS() {
+  const selected = allEvents.filter(e => e.selected);
+  if (selected.length === 0) return;
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Gottesdienstordnung',
+    'X-WR-TIMEZONE:Europe/Berlin',
+  ];
+
+  for (const ev of selected) {
+    const uid = `${ev.id}@gottesdienst-kalender`;
+    const now = icsDate(new Date());
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${uid}`);
+    lines.push(`DTSTAMP:${now}`);
+    if (ev.allDay) {
+      const d = ev.dtStart;
+      const pad = n => String(n).padStart(2,'0');
+      lines.push(`DTSTART;VALUE=DATE:${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`);
+      lines.push(`DTEND;VALUE=DATE:${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`);
+    } else {
+      lines.push(`DTSTART;TZID=Europe/Berlin:${icsDateLocal(ev.dtStart)}`);
+      lines.push(`DTEND;TZID=Europe/Berlin:${icsDateLocal(ev.dtEnd)}`);
+    }
+    lines.push(`SUMMARY:${icsEscape(ev.title)}`);
+    lines.push(`LOCATION:${icsEscape(ev.location)}`);
+    lines.push(`DESCRIPTION:${icsEscape(ev.description)}`);
+    lines.push('STATUS:CONFIRMED');
+    lines.push('END:VEVENT');
+  }
+
+  lines.push('END:VCALENDAR');
+
+  // Fold lines > 75 chars
+  const folded = lines.flatMap(line => {
+    const chunks = [];
+    while (line.length > 75) {
+      chunks.push(line.slice(0, 75));
+      line = ' ' + line.slice(75);
+    }
+    chunks.push(line);
+    return chunks;
+  });
+
+  const icsContent = folded.join('\r\n');
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `gottesdienst-${yearInput.value}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus(`${selected.length} Termine als ICS exportiert.`, 'success');
+}
+
+function icsDate(dt) {
+  const pad = n => String(n).padStart(2,'0');
+  return `${dt.getUTCFullYear()}${pad(dt.getUTCMonth()+1)}${pad(dt.getUTCDate())}T${pad(dt.getUTCHours())}${pad(dt.getUTCMinutes())}${pad(dt.getUTCSeconds())}Z`;
+}
+function icsDateLocal(dt) {
+  const pad = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+}
+function icsEscape(s) {
+  return (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+}
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showStatus(msg, type, loading = false) {
+  statusArea.innerHTML = `<div class="status ${type}">${loading ? '<div class="loading"><div class="spinner"></div>' + msg + '</div>' : msg}</div>`;
+}
+</script>
+</body>
+</html>
